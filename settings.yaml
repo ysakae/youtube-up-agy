@@ -1,0 +1,25 @@
+# YouTube Bulk Uploader Configuration
+
+# Authentication settings
+auth:
+  client_secrets_file: "client_secrets.json"
+  token_file: "token.pickle"
+  scopes:
+    - "https://www.googleapis.com/auth/youtube.upload"
+    - "https://www.googleapis.com/auth/youtube.readonly"
+
+# Upload settings
+upload:
+  # Chunk size in bytes (multiple of 256KB). 1024 * 1024 * 4 = 4MB
+  chunk_size: 4194304
+  retry_count: 5
+  privacy_status: "private"  # private, public, unlisted
+
+# AI Metadata settings (Optional)
+ai:
+  enabled: false
+  api_key: ""  # GEMINI_API_KEY env var is preferred
+  model: "gemini-pro"
+
+# Database path
+history_db: "upload_history.json"
