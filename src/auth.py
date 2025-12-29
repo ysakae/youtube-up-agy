@@ -13,6 +13,7 @@ from .profiles import (
     get_profile_path,
     migrate_legacy_token,
     set_active_profile,
+    delete_profile_token,
 )
 
 logger = logging.getLogger("youtube_up")
@@ -82,3 +83,19 @@ def authenticate_new_profile(name: str) -> Resource:
     
     # This will trigger the OAuth flow for the new profile name since token won't exist
     return get_authenticated_service()
+
+
+def logout(name: str = None):
+    """
+    Logout from a profile (delete token).
+    If name is None, logs out from the active profile.
+    """
+    if name is None:
+        name = get_active_profile()
+    
+    if delete_profile_token(name):
+        logger.info(f"Successfully logged out from profile: {name}")
+        return True
+    else:
+        logger.warning(f"Profile {name} was not logged in (token not found).")
+        return False
