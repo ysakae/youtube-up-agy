@@ -7,7 +7,14 @@ from src.config import config
 
 
 class TestAuth:
-    def test_get_authenticated_service_success(self, mocker):
+    @pytest.fixture
+    def mock_profiles(self, mocker):
+        mocker.patch("src.auth.migrate_legacy_token")
+        mocker.patch("src.auth.get_active_profile", return_value="default")
+        mocker.patch("src.auth.get_profile_path", return_value="tokens/default.pickle")
+        mocker.patch("src.auth.ensure_tokens_dir")
+
+    def test_get_authenticated_service_success(self, mocker, mock_profiles):
         """Test successful authentication."""
         # Mock installedAppFlow
         mock_flow = MagicMock()
@@ -51,7 +58,7 @@ class TestAuth:
 
         mock_build.assert_called_with("youtube", "v3", credentials=mock_creds)
 
-    def test_get_authenticated_service_no_secrets(self, mocker):
+    def test_get_authenticated_service_no_secrets(self, mocker, mock_profiles):
         """Test failure when secrets file missing."""
         mocker.patch("os.path.exists", return_value=False)
         mocker.patch.object(config.auth, "client_secrets_file", "missing.json")

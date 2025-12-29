@@ -17,3 +17,7 @@ test_videos/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Auth
+tokens/
+.active_profile

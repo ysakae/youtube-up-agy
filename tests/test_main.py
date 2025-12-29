@@ -31,11 +31,14 @@ class TestMain:
 
         return mock_auth
 
-    def test_auth_command(self, mock_deps):
+    def test_auth_command(self, mock_deps, mocker):
         """Test auth command."""
+        mocker.patch("src.main.get_active_profile", return_value="default")
+        
         result = runner.invoke(app, ["auth"])
+        
         assert result.exit_code == 0
-        assert "Authentication successful!" in result.stdout
+        assert "Active Profile: default" in result.stdout
         assert "Connected to channel: TestChannel" in result.stdout
 
     def test_upload_dry_run(self, mocker):
