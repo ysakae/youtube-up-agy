@@ -1,13 +1,11 @@
-import pytest
 from src.profiles import (
+    DEFAULT_PROFILE,
     get_active_profile,
-    set_active_profile,
     get_profile_path,
     list_profiles,
-    DEFAULT_PROFILE,
-    TOKENS_DIR,
-    ACTIVE_PROFILE_FILE
+    set_active_profile,
 )
+
 
 class TestProfiles:
     # Removed incomplete test_default_profile
@@ -42,3 +40,21 @@ class TestProfiles:
         mocker.patch("src.profiles.TOKENS_DIR", tmp_path / "tokens")
         path = get_profile_path("test")
         assert path == tmp_path / "tokens" / "test.pickle"
+
+    def test_delete_profile_token(self, tmp_path, mocker):
+        from src.profiles import delete_profile_token
+        
+        mocker.patch("src.profiles.TOKENS_DIR", tmp_path / "tokens")
+        token_path = tmp_path / "tokens" / "test.pickle"
+        token_path.parent.mkdir()
+        token_path.touch()
+        
+        assert delete_profile_token("test") is True
+        assert not token_path.exists()
+        
+    def test_delete_profile_token_not_exists(self, tmp_path, mocker):
+        from src.profiles import delete_profile_token
+        
+        mocker.patch("src.profiles.TOKENS_DIR", tmp_path / "tokens")
+        
+        assert delete_profile_token("nonexistent") is False

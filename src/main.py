@@ -18,7 +18,7 @@ from rich.progress import (
 from rich.table import Table
 
 from .ai import MetadataGenerator
-from .auth import authenticate_new_profile, get_authenticated_service
+from .auth import authenticate_new_profile, get_authenticated_service, logout
 from .history import HistoryManager
 from .logger import setup_logging
 from .profiles import get_active_profile, list_profiles, set_active_profile
@@ -114,6 +114,19 @@ def list_cmd():
     for p in profiles:
         mark = "*" if p == active else " "
         console.print(f" {mark} {p}")
+
+
+@auth_app.command("logout")
+def logout_cmd(
+    profile: str = typer.Argument(
+        None, help="Profile name to logout from (default: active profile)"
+    )
+):
+    """Logout from a profile."""
+    if logout(profile):
+        console.print(f"[green]Successfully logged out from {profile or 'active profile'}.[/green]")
+    else:
+        console.print(f"[yellow]No active session found for {profile or 'active profile'}.[/yellow]")
 
 
 @app.command()

@@ -49,3 +49,15 @@ def migrate_legacy_token():
         shutil.move(str(legacy_token), str(default_token))
         set_active_profile(DEFAULT_PROFILE)
         print(f"Migrated legacy token to {default_token}")
+
+
+def delete_profile_token(name: str) -> bool:
+    """
+    Delete the token file for a profile.
+    Returns True if file was deleted, False if it didn't exist.
+    """
+    token_path = get_profile_path(name)
+    if token_path.exists():
+        token_path.unlink()
+        return True
+    return False
