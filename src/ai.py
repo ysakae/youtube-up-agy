@@ -36,10 +36,15 @@ class MetadataGenerator:
 
         language = config.ai.language
         lang_instruction = "in Japanese" if language == "ja" else f"in {language}"
+        directory_name = file_path.parent.name
 
         prompt = f"""
         You are a YouTube SEO expert.
         Generate metadata for a video file named "{file_path.name}".
+        The video is located in a directory named "{directory_name}".
+        This directory name likely represents the EVENT NAME, LOCATION, or DATE. 
+        Please incorporate this context into the Title and Description if it seems relevant.
+
         The content should be generated **{lang_instruction}**.
         
         Return ONLY a raw JSON object (no markdown formatting) with the following structure:
