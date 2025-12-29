@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import typer
+from googleapiclient.errors import HttpError
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -15,9 +16,10 @@ from rich.progress import (
 )
 
 from .ai import MetadataGenerator
-from .auth import get_authenticated_service
+from .auth import authenticate_new_profile, get_authenticated_service
 from .history import HistoryManager
 from .logger import setup_logging
+from .profiles import get_active_profile, list_profiles, set_active_profile
 from .scanner import calculate_hash, scan_directory
 from .uploader import VideoUploader
 
@@ -27,14 +29,49 @@ logger = logging.getLogger("youtube_up")
 
 
 @app.command()
-def auth():
+def auth(
+    login: str = typer.Option(None, "--login", help="Create/Login to a new profile"),
+    switch: str = typer.Option(None, "--switch", help="Switch to an existing profile"),
+    list_p: bool = typer.Option(False, "--list", help="List all profiles"),
+):
     """
-    Authenticate with YouTube API and save credentials.
+    Manage authentication profiles.
     """
     setup_logging()
+
     try:
+        if list_p:
+            profiles = list_profiles()
+            active = get_active_profile()
+            console.print("[bold]Available Profiles:[/]")
+            for p in profiles:
+                mark = "*" if p == active else " "
+                console.print(f" {mark} {p}")
+            return
+
+        if switch:
+            profiles = list_profiles()
+            if switch not in profiles:
+                console.print(f"[bold red]Profile '{switch}' not found.[/]")
+                console.print(f"Available: {', '.join(profiles)}")
+                raise typer.Exit(code=1)
+
+            set_active_profile(switch)
+            console.print(f"[bold green]Switched to profile: {switch}[/]")
+            # Fallthrough to verify
+
+        if login:
+            console.print(f"[bold]Logging in as new profile: {login}...[/]")
+            service = authenticate_new_profile(login)
+            console.print(f"[bold green]Successfully authenticated profile: {login}[/]")
+            # Fallthrough to verify
+
+        # Default: Show status / Verify active
+        active = get_active_profile()
+        console.print(f"Active Profile: [bold cyan]{active}[/]")
+
         service = get_authenticated_service()
-        console.print("[bold green]Authentication successful![/]")
+
         # Verify by getting channel info
         request = service.channels().list(part="snippet", mine=True)
         response = request.execute()
@@ -43,8 +80,15 @@ def auth():
             console.print(
                 Panel(
                     f"Connected to channel: [bold cyan]{channel_title}[/]",
-                    title="Auth Info",
+                    title=f"Auth Info ({active})",
                 )
+            )
+        else:
+            console.print(
+                "[bold yellow]Authentication successful, but NO channel found![/]"
+            )
+            console.print(
+                "Please create a YouTube channel to upload videos: https://www.youtube.com/create_channel"
             )
     except Exception as e:
         console.print(f"[bold red]Authentication failed:[/] {e}")
@@ -179,6 +223,19 @@ async def orchestrate_upload(
                             f"[bold green]Uploaded {file_path.name} -> {video_id}[/]"
                         )
 
+                except HttpError as e:
+                    if "youtubeSignupRequired" in str(e):
+                        progress.console.print(
+                            f"[bold red]Error processing {file_path.name}: No YouTube channel found.[/]"
+                        )
+                        progress.console.print(
+                            "Please create a channel associated with this account."
+                        )
+                    else:
+                        progress.console.print(
+                            f"[bold red]API Error processing {file_path.name}: {e}[/]"
+                        )
+                    logger.error(f"API Error processing {file_path.name}: {e}")
                 except Exception as e:
                     progress.console.print(
                         f"[bold red]Error processing {file_path.name}: {e}[/]"

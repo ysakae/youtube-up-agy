@@ -9,7 +9,7 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -18,8 +18,17 @@ from .config import config
 
 logger = logging.getLogger("youtube_up")
 
-# Define retryable exceptions
-RETRIABLE_EXCEPTIONS = (HttpError, socket.error, socket.timeout)
+
+def should_retry_exception(exception: BaseException) -> bool:
+    """Check if the exception is worth retrying."""
+    if isinstance(exception, (socket.error, socket.timeout)):
+        return True
+    if isinstance(exception, HttpError):
+        # Retry 5xx server errors, 429 Too Many Requests, and 408 Request Timeout
+        if exception.resp.status in [408, 429, 500, 502, 503, 504]:
+            return True
+        return False
+    return False
 
 
 class VideoUploader:
@@ -29,7 +38,7 @@ class VideoUploader:
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=60),
         stop=stop_after_attempt(config.upload.retry_count),
-        retry=retry_if_exception_type(RETRIABLE_EXCEPTIONS),
+        retry=retry_if_exception(should_retry_exception),
     )
     async def upload_video(
         self,
