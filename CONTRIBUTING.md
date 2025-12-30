@@ -35,7 +35,7 @@ pip install -e .
 現状、自動テストスイートは整備中ですが、以下の手順で動作確認を行ってください。
 
 1. `test_videos` ディレクトリなどにダミー動画を作成。
-2. `--dry-run` オプションでスキャナーとAI生成ロジックを確認。
+2. `--dry-run` オプションでスキャナーとメタデータ生成ロジックを確認。
 ```bash
 python -m src.main upload test_videos --dry-run
 ```
