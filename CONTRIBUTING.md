@@ -1,6 +1,6 @@
 # 開発者向けガイド (Contributing Guide)
 
-`youtube-up-agy` への貢献に関心を持っていただきありがとうございます！
+`youtube-bulkup` への貢献に関心を持っていただきありがとうございます！
 
 ## 環境構築
 
@@ -8,8 +8,8 @@
 
 ```bash
 # クローン
-git clone https://github.com/ysakae/youtube-up-agy.git
-cd youtube-up-agy
+git clone https://github.com/ysakae/youtube-bulkup.git
+cd youtube-bulkup
 
 # 仮想環境作成と有効化
 python3 -m venv .venv

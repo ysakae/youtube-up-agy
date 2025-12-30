@@ -1,5 +1,5 @@
 [project]
-name = "youtube-up-agy"
+name = "youtube-bulkup"
 version = "0.1.0"
 description = "Efficient YouTube Bulk Uploader with Automated Metadata Extraction"
 authors = [

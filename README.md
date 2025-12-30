@@ -1,4 +1,4 @@
-# YouTube Bulk Uploader (youtube-up-agy)
+# YouTube Bulk Uploader (youtube-bulkup)
 
 大量の動画ファイルをYouTubeへ効率的に一括アップロードするためのPython製CLIツールです。
 コンテンツクリエイターや企業の運用負荷を軽減するために設計されています。
@@ -41,8 +41,8 @@
 
 1. **リポジトリのクローン**
    ```bash
-   git clone https://github.com/ysakae/youtube-up-agy.git
-   cd youtube-up-agy
+   git clone https://github.com/ysakae/youtube-bulkup.git
+   cd youtube-bulkup
    ```
 
 2. **セットアップ**
