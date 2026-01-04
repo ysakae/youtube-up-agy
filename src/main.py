@@ -132,14 +132,24 @@ def logout_cmd(
 
 @app.command()
 def history(
-    limit: int = typer.Option(10, help="Number of records to show"),
+    limit: int = typer.Option(0, help="Number of records to show (0 for all)"),
+    status: str = typer.Option(
+        None, help="Filter by status (success/failed)"
+    ),
 ):
     """
     Show upload history.
     """
     # setup_logging() # Optional, maybe not needed for just reading DB
     history_manager = HistoryManager()
-    records = history_manager.get_all_records(limit=limit)
+    # Always fetch all to filter manually
+    records = history_manager.get_all_records(limit=0)
+
+    if status:
+        records = [r for r in records if r.get("status", "success") == status]
+
+    if limit > 0:
+        records = records[:limit]
 
     if not records:
         console.print("[yellow]No upload history found.[/]")
@@ -147,8 +157,9 @@ def history(
 
     table = Table(title="Upload History")
     table.add_column("Date", style="cyan", no_wrap=True)
+    table.add_column("Status", style="bold")
     table.add_column("Title", style="magenta")
-    table.add_column("Video ID", style="green")
+    table.add_column("Video ID / Error", style="green")
     table.add_column("File", style="dim")
 
     for r in records:
@@ -156,12 +167,24 @@ def history(
         date_str = (
             datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "N/A"
         )
-        vid = r.get("video_id", "N/A")
-        link = f"[link=https://youtu.be/{vid}]{vid}[/link]" if vid != "N/A" else "N/A"
-        title = r.get("metadata", {}).get("title", "N/A")
+        status = r.get("status", "success")
         path = Path(r.get("file_path", "")).name
+        
+        if status == "failed":
+            status_str = "[red]Failed[/]"
+            title = path
+            vid = r.get("error", "Unknown Error")
+            # Truncate long error messages
+            if len(vid) > 40:
+                vid = vid[:37] + "..."
+            vid_col = f"[red]{vid}[/]"
+        else:
+            status_str = "[green]Success[/]"
+            vid = r.get("video_id", "N/A")
+            vid_col = f"[link=https://youtu.be/{vid}]{vid}[/link]" if vid != "N/A" else "N/A"
+            title = r.get("metadata", {}).get("title", "N/A")
 
-        table.add_row(date_str, title, link, path)
+        table.add_row(date_str, status_str, title, vid_col, path)
 
     console.print(table)
 
