@@ -15,6 +15,9 @@ console = Console()
 
 @app.command("retry")
 def retry(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Scan and generate metadata without uploading"
+    ),
     workers: int = typer.Option(
         1, help="Number of concurrent uploads (careful with quota!)"
     ),
@@ -47,17 +50,20 @@ def retry(
         return
 
     # Auth
-    try:
-        service = get_authenticated_service()
-    except Exception as e:
-        console.print(f"[bold red]Auth Error:[/] {e}")
-        raise typer.Exit(code=1)
+    if not dry_run:
+        try:
+            service = get_authenticated_service()
+        except Exception as e:
+            console.print(f"[bold red]Auth Error:[/] {e}")
+            raise typer.Exit(code=1)
+    else:
+        service = None
 
-    uploader = VideoUploader(service)
+    uploader = VideoUploader(service) if service else None
     meta_gen = FileMetadataGenerator()
 
     asyncio.run(
         process_video_files(
-            files_to_retry, uploader, history, meta_gen, dry_run=False, workers=workers
+            files_to_retry, uploader, history, meta_gen, dry_run=dry_run, workers=workers
         )
     )
