@@ -26,6 +26,9 @@ def reupload(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Simulate re-upload without deleting history or uploading"
     ),
+    playlist: str = typer.Option(
+        None, "--playlist", "-p", help="Playlist name (defaults to folder name)"
+    ),
 ):
     """
     Force re-upload of specific files by clearing their history.
@@ -105,6 +108,6 @@ def reupload(
     # If dry_run is True, we force processing because history wasn't deleted (so is_uploaded would be true)
     asyncio.run(
         process_video_files(
-            files_to_process, uploader, history, meta_gen, dry_run=dry_run, workers=workers, force=dry_run
+            files_to_process, uploader, history, meta_gen, dry_run=dry_run, workers=workers, force=dry_run, playlist_name=playlist
         )
     )

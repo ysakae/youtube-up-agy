@@ -16,6 +16,43 @@ class HistoryManager:
             self.db_path, indent=4, separators=(",", ": "), encoding="utf-8"
         )
         self.table = self.db.table("uploads")
+        self.table = self.db.table("uploads")
+        self._migrate_schema_v2()
+
+    def _migrate_schema_v2(self):
+        """
+        Migrate existing records to include 'playlist_name' field if missing.
+        """
+        # This is strictly optional if we use .get('playlist_name') everywhere,
+        # but good for consistency.
+        current_records = self.table.all()
+        updates = []
+        for record in current_records:
+            if "playlist_name" not in record:
+                # We can't infer it easily without the original path context being strict,
+                # so we default to None. 
+                # Or we could infer from file parent name?
+                # For now, let's just ensure the field exists.
+                # Actually, inferring from file_path parent is safer if we want retry to work for old failures.
+                
+                # Try to infer details if possible, or just None.
+                # If we want old failures to be retriable with playlist logic, we might need a smart guess.
+                # But safer to leave None and let fallback happen (failed record usually has file path).
+                # Wait, if we leave it None, retry loop needs to re-evaluate playlist.
+                
+                # Let's just set None for now. logic in retry command will handle the default (folder name).
+                updates.append((record.doc_id, {"playlist_name": None}))
+        
+        if updates:
+            logger.info(f"Migrating {len(updates)} records to schema v2 (add playlist_name)...")
+            def _update_op(doc_ids, changes):
+                for doc_id, change in zip(doc_ids, changes):
+                    self.table.update(change, doc_ids=[doc_id])
+            
+            # Simple loop update
+            for doc_id, change in updates:
+                self.table.update(change, doc_ids=[doc_id])
+
 
     def is_uploaded(self, file_hash: str) -> bool:
         """Check if a file with the given hash has already been successfully uploaded."""
@@ -24,8 +61,14 @@ class HistoryManager:
             (File.file_hash == file_hash) & (File.status == "success")
         )
 
+
     def add_record(
-        self, file_path: str, file_hash: str, video_id: str, metadata: Dict[str, Any]
+        self,
+        file_path: str,
+        file_hash: str,
+        video_id: str,
+        metadata: Dict[str, Any],
+        playlist_name: Optional[str] = None,
     ):
         """Record a successful upload."""
         File = Query()
@@ -38,12 +81,19 @@ class HistoryManager:
                 "timestamp": time.time(),
                 "status": "success",
                 "error": None,
+                "playlist_name": playlist_name,
             },
             File.file_hash == file_hash,
         )
         logger.info(f"Recorded upload history for {file_path}")
 
-    def add_failure(self, file_path: str, file_hash: str, error_msg: str):
+    def add_failure(
+        self,
+        file_path: str,
+        file_hash: str,
+        error_msg: str,
+        playlist_name: Optional[str] = None,
+    ):
         """Record a failed upload."""
         File = Query()
         self.table.upsert(
@@ -55,6 +105,7 @@ class HistoryManager:
                 "timestamp": time.time(),
                 "status": "failed",
                 "error": str(error_msg),
+                "playlist_name": playlist_name,
             },
             File.file_hash == file_hash,
         )

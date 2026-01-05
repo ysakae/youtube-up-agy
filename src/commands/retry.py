@@ -1,6 +1,7 @@
 import asyncio
 import typer
 from pathlib import Path
+from collections import defaultdict
 from rich.console import Console
 
 from ..lib.auth.auth import get_authenticated_service
@@ -21,6 +22,9 @@ def retry(
     workers: int = typer.Option(
         1, help="Number of concurrent uploads (careful with quota!)"
     ),
+    playlist: str = typer.Option(
+        None, "--playlist", "-p", help="Playlist name (override persisted history or default)"
+    ),
 ):
     """
     Retry uploading failed files.
@@ -36,16 +40,17 @@ def retry(
 
     console.print(f"[bold]Found {len(failed_records)} failed uploads.[/]")
 
-    # Verify if files exist
-    files_to_retry = []
+    # Group files by playlist
+    tasks_by_playlist = defaultdict(list)
+    
     for record in failed_records:
-        file_path = Path(record["file_path"])
-        if file_path.exists():
-            files_to_retry.append(file_path)
-        else:
-            console.print(f"[yellow]File missing: {file_path}[/]")
+        f_path = Path(record["file_path"])
+        if f_path.exists():
+            # Priority: CLI override > Persisted History > None (default logic)
+            pl_name = playlist if playlist else record.get("playlist_name")
+            tasks_by_playlist[pl_name].append(f_path)
 
-    if not files_to_retry:
+    if not tasks_by_playlist:
         console.print("[yellow]No valid files to retry.[/]")
         return
 
@@ -62,8 +67,15 @@ def retry(
     uploader = VideoUploader(service) if service else None
     meta_gen = FileMetadataGenerator()
 
-    asyncio.run(
-        process_video_files(
-            files_to_retry, uploader, history, meta_gen, dry_run=dry_run, workers=workers
+    # Process each playlist group
+    for pl_name, files in tasks_by_playlist.items():
+        if pl_name:
+             console.print(f"\n[bold]Retrying {len(files)} files for playlist: '{pl_name}'[/]")
+        else:
+             console.print(f"\n[bold]Retrying {len(files)} files (default playlist)...[/]")
+
+        asyncio.run(
+            process_video_files(
+                files, uploader, history, meta_gen, dry_run=dry_run, workers=workers, playlist_name=pl_name
+            )
         )
-    )
