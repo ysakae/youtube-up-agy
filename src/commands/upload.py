@@ -15,6 +15,9 @@ console = Console()
 @app.command("upload")
 def upload(
     directory: str = typer.Argument(..., help="Directory containing videos"),
+    playlist: str = typer.Option(
+        None, "--playlist", "-p", help="Playlist name (defaults to folder name)"
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Scan and generate metadata without uploading"
     ),
@@ -39,6 +42,7 @@ def upload(
     meta_gen = FileMetadataGenerator()
 
     # Run async orchestrator
+    # Run async orchestrator
     asyncio.run(
-        orchestrate_upload(directory, uploader, history, meta_gen, dry_run, workers)
+        orchestrate_upload(directory, uploader, history, meta_gen, dry_run, workers, playlist)
     )

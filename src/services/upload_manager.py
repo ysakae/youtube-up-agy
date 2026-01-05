@@ -20,6 +20,8 @@ from ..lib.video.metadata import FileMetadataGenerator
 from ..lib.data.history import HistoryManager
 from ..lib.video.scanner import calculate_hash, scan_directory
 from ..lib.video.uploader import VideoUploader
+from ..lib.video.playlist import PlaylistManager
+from ..lib.core.config import config
 
 logger = logging.getLogger("youtube_up")
 console = Console()
@@ -31,6 +33,7 @@ async def process_video_files(
     metadata_gen: FileMetadataGenerator,
     dry_run: bool,
     workers: int,
+    playlist_name: str = None,
     force: bool = False,
 ):
     """
@@ -71,6 +74,9 @@ async def process_video_files(
         # Semaphore for concurrency
         sem = asyncio.Semaphore(workers)
         stop_event = asyncio.Event()
+        
+        # Initialize PlaylistManager
+        playlist_manager = PlaylistManager(uploader.service) if uploader and not dry_run else None
 
         async def process_file(file_path: Path):
             if stop_event.is_set():
@@ -106,12 +112,14 @@ async def process_video_files(
                     metadata = metadata_gen.generate(file_path, idx, tot)
 
                     if dry_run:
+                        target_playlist = playlist_name or file_path.parent.name
                         progress.console.print(
                             Panel(
                                 f"Title: {metadata['title']}\n"
                                 f"Desc: {metadata['description'][:50]}...\n"
                                 f"Tags: {metadata['tags']}\n"
-                                f"Rec Details: {metadata.get('recordingDetails')}",
+                                f"Rec Details: {metadata.get('recordingDetails')}\n"
+                                f"[bold]Playlist:[/] {target_playlist}",
                                 title=f"[Dry Run] Metadata for {file_path.name}",
                             )
                         )
@@ -141,6 +149,34 @@ async def process_video_files(
                             f"[bold green]Uploaded {file_path.name} -> {video_id}[/]"
                         )
 
+                        # Playlist Management
+                        target_playlist = playlist_name or file_path.parent.name
+                        
+                        if playlist_manager:
+                            try:
+                                # Get or create playlist (thread-safe enough for now as cache handles most)
+                                # Note: In high concurrency, creating same playlist might be racy. 
+                                # But we can rely on API handling or accept minor risk for now.
+                                pl_id = await asyncio.to_thread(
+                                    playlist_manager.get_or_create_playlist, 
+                                    target_playlist, 
+                                    config.upload.privacy_status
+                                )
+                                
+                                if pl_id:
+                                    await asyncio.to_thread(
+                                        playlist_manager.add_video_to_playlist, pl_id, video_id
+                                    )
+                                    progress.console.print(
+                                        f"[dim]Added to playlist: {target_playlist}[/]"
+                                    )
+                            except Exception as e:
+                                logger.error(f"Failed to add to playlist {target_playlist}: {e}")
+                                progress.console.print(
+                                    f"[red]Warning: Failed to add to playlist: {e}[/]"
+                                )
+
+
                 except HttpError as e:
                     if "youtubeSignupRequired" in str(e):
                         progress.console.print(
@@ -156,7 +192,8 @@ async def process_video_files(
                         stop_event.set()
                         # Record this failure too so it can be retried later
                         if file_hash != "unknown":
-                            history.add_failure(str(file_path), file_hash, "Quota Exceeded")
+                            target_playlist = playlist_name or file_path.parent.name
+                            history.add_failure(str(file_path), file_hash, "Quota Exceeded", playlist_name=target_playlist)
                     else:
                         progress.console.print(
                             f"[bold red]API Error processing {file_path.name}: {e}[/]"
@@ -165,7 +202,8 @@ async def process_video_files(
                     
                     # If not quota error, record failure as usual
                     if not stop_event.is_set() and file_hash != "unknown":
-                        history.add_failure(str(file_path), file_hash, str(e))
+                        target_playlist = playlist_name or file_path.parent.name
+                        history.add_failure(str(file_path), file_hash, str(e), playlist_name=target_playlist)
 
                 except Exception as e:
                     progress.console.print(
@@ -173,7 +211,8 @@ async def process_video_files(
                     )
                     logger.exception(f"Error processing {file_path.name}")
                     if file_hash != "unknown":
-                        history.add_failure(str(file_path), file_hash, str(e))
+                        target_playlist = playlist_name or file_path.parent.name
+                        history.add_failure(str(file_path), file_hash, str(e), playlist_name=target_playlist)
                 finally:
                     progress.update(task_id, visible=False)
                     progress.advance(overall_task)
@@ -194,7 +233,9 @@ async def orchestrate_upload(
     metadata_gen: FileMetadataGenerator,
     dry_run: bool,
     workers: int,
+    playlist: str = None,
 ):
+
     """
     Core async logic for processing video files.
     """
@@ -207,5 +248,5 @@ async def orchestrate_upload(
         return
 
     await process_video_files(
-        video_files, uploader, history, metadata_gen, dry_run, workers
+        video_files, uploader, history, metadata_gen, dry_run, workers, playlist
     )
