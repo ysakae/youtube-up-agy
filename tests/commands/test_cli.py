@@ -81,6 +81,7 @@ def mock_dependencies():
             "auth": m_auth_auth,
             "auth_upload": m_auth_upload,
             "auth_reupload": m_auth_reupload,
+            "auth_retry": m_auth_retry,
             "uploader": mock_uploader_instance,
             "history": mock_history_instance,
             "scan": mock_scan,
@@ -157,6 +158,7 @@ def test_reupload_dry_run(mock_dependencies):
 
 
 
+
 def test_retry_command(mock_dependencies):
     mock_dependencies["history"].get_failed_records.return_value = [
         {"file_path": "/failed/vid.mp4"}
@@ -166,6 +168,23 @@ def test_retry_command(mock_dependencies):
         result = runner.invoke(app, ["retry"])
         assert result.exit_code == 0
         assert "Found 1 failed uploads" in result.stdout
+
+
+def test_retry_command_dry_run(mock_dependencies):
+    mock_dependencies["history"].get_failed_records.return_value = [
+        {"file_path": "/failed/vid.mp4"}
+    ]
+    
+    with patch("pathlib.Path.exists", return_value=True):
+        result = runner.invoke(app, ["retry", "--dry-run"])
+        assert result.exit_code == 0
+        assert "Found 1 failed uploads" in result.stdout
+        
+        # Verify dry-run was passed to process_video_files
+        # Note: We can't easily mock process_video_files args here since it's an async run inside retry
+        # But we can verify no authentication happened
+        mock_dependencies["auth_retry"].assert_not_called()
+
 
 
 def test_history_command():
