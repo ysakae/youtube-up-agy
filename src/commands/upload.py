@@ -2,7 +2,7 @@ import asyncio
 import typer
 from rich.console import Console
 
-from ..lib.auth.auth import get_authenticated_service
+from ..lib.auth.auth import get_credentials
 from ..lib.data.history import HistoryManager
 from ..lib.core.logger import setup_logging
 from ..lib.video.metadata import FileMetadataGenerator
@@ -32,12 +32,12 @@ def upload(
 
     # 1. Setup components
     try:
-        service = get_authenticated_service() if not dry_run else None
+        credentials = get_credentials() if not dry_run else None
     except Exception as e:
         console.print(f"[bold red]Auth Error:[/] {e}")
         raise typer.Exit(code=1)
 
-    uploader = VideoUploader(service) if service else None
+    uploader = VideoUploader(credentials) if credentials else None
     history = HistoryManager()
     meta_gen = FileMetadataGenerator()
 

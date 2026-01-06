@@ -4,7 +4,7 @@ import socket
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from googleapiclient.discovery import Resource
+from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from tenacity import (
@@ -32,8 +32,9 @@ def should_retry_exception(exception: BaseException) -> bool:
 
 
 class VideoUploader:
-    def __init__(self, service: Resource):
-        self.service = service
+    def __init__(self, credentials):
+        self.credentials = credentials
+        # self.service is no longer stored here to ensure thread safety
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=60),
@@ -74,7 +75,11 @@ class VideoUploader:
             str(file_path), chunksize=config.upload.chunk_size, resumable=True
         )
 
-        request = self.service.videos().insert(
+        # Build a fresh service instance for this thread
+        # This is critical for thread safety with httplib2
+        service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+
+        request = service.videos().insert(
             part=",".join(body.keys()), body=body, media_body=media
         )
 
