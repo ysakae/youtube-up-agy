@@ -19,9 +19,9 @@ from .profiles import (
 logger = logging.getLogger("youtube_up")
 
 
-def get_authenticated_service() -> Resource:
+def get_credentials():
     """
-    Authenticate and return a YouTube API service resource.
+    Get authenticated credentials.
     Handles token storage and refreshing for the active profile.
     """
     # Migration check
@@ -71,6 +71,15 @@ def get_authenticated_service() -> Resource:
             pickle.dump(creds, token)
             logger.info(f"Saved credentials to {token_file}")
 
+    return creds
+
+
+def get_authenticated_service() -> Resource:
+    """
+    Authenticate and return a YouTube API service resource.
+    Handles token storage and refreshing for the active profile.
+    """
+    creds = get_credentials()
     return build("youtube", "v3", credentials=creds)
 
 

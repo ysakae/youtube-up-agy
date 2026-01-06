@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List
 from rich.console import Console
 
-from ..lib.auth.auth import get_authenticated_service
+from ..lib.auth.auth import get_credentials
 from ..lib.data.history import HistoryManager
 from ..lib.core.logger import setup_logging
 from ..lib.video.metadata import FileMetadataGenerator
@@ -82,12 +82,12 @@ def reupload(
 
     # Auth
     try:
-        service = get_authenticated_service() if not dry_run else None
+        credentials = get_credentials() if not dry_run else None
     except Exception as e:
         console.print(f"[bold red]Auth Error:[/] {e}")
         raise typer.Exit(code=1)
 
-    uploader = VideoUploader(service) if service else None
+    uploader = VideoUploader(credentials) if credentials else None
     meta_gen = FileMetadataGenerator()
 
     # Clear history for these files (unless dry run)

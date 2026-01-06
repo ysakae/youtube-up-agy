@@ -76,7 +76,7 @@ async def process_video_files(
         stop_event = asyncio.Event()
         
         # Initialize PlaylistManager
-        playlist_manager = PlaylistManager(uploader.service) if uploader and not dry_run else None
+        playlist_manager = PlaylistManager(uploader.credentials) if uploader and not dry_run else None
 
         async def process_file(file_path: Path):
             if stop_event.is_set():

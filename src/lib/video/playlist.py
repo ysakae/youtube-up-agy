@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Optional, Any
 
-from googleapiclient.discovery import Resource
+from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
 
 from ..core.config import config
@@ -12,8 +12,8 @@ class PlaylistManager:
     """
     Manages YouTube Playlist interactions.
     """
-    def __init__(self, service: Resource):
-        self.service = service
+    def __init__(self, credentials):
+        self.credentials = credentials
         # Cache playlist IDs to avoid redundant API calls: {title: playlist_id}
         self._playlist_cache: Dict[str, str] = {}
         self._initialized = False
@@ -27,7 +27,9 @@ class PlaylistManager:
             return
 
         try:
-            request = self.service.playlists().list(
+            service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+            
+            request = service.playlists().list(
                 part="snippet,id",
                 mine=True,
                 maxResults=50  # Adjust pagination if user has many playlists
@@ -71,7 +73,10 @@ class PlaylistManager:
         }
         
         try:
-            request = self.service.playlists().insert(
+            # Build fresh service for write operation
+            service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+            
+            request = service.playlists().insert(
                 part="snippet,status",
                 body=body
             )
@@ -101,7 +106,9 @@ class PlaylistManager:
         }
         
         try:
-            request = self.service.playlistItems().insert(
+            service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+
+            request = service.playlistItems().insert(
                 part="snippet",
                 body=body
             )

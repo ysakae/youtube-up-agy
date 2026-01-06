@@ -14,9 +14,9 @@ runner = CliRunner()
 def mock_dependencies():
     # We need to patch dependencies in all modules where they are imported
     with patch("src.commands.auth.get_authenticated_service") as m_auth_auth, \
-         patch("src.commands.upload.get_authenticated_service") as m_auth_upload, \
-         patch("src.commands.reupload.get_authenticated_service") as m_auth_reupload, \
-         patch("src.commands.retry.get_authenticated_service") as m_auth_retry, \
+         patch("src.commands.upload.get_credentials") as m_auth_upload, \
+         patch("src.commands.reupload.get_credentials") as m_auth_reupload, \
+         patch("src.commands.retry.get_credentials") as m_auth_retry, \
          \
          patch("src.commands.upload.VideoUploader") as m_upl_upload, \
          patch("src.commands.reupload.VideoUploader") as m_upl_reupload, \
