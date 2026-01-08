@@ -105,7 +105,7 @@ class TestMain:
         video_file.touch()
 
         mocker.patch("src.lib.core.logger.setup_logging")
-        mocker.patch("src.commands.upload.get_authenticated_service")  # Mock auth
+        mocker.patch("src.commands.upload.get_credentials")  # Mock auth
         mocker.patch("src.services.upload_manager.scan_directory", return_value=[video_file])
         mocker.patch("src.services.upload_manager.calculate_hash", return_value="hash123")
 
