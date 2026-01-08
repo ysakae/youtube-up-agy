@@ -47,13 +47,13 @@
    ```
 
 2. **セットアップ**
-   `venv`（仮想環境）の利用を推奨します。
+   `uv` (高速なPythonパッケージマネージャー) の利用を推奨します。
    ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   # pipをアップグレード（重要：ビルドツール対応のため）
-   pip install --upgrade pip
-   pip install -e .
+   # uvが未インストールの場合はインストール
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+
+   # 依存関係のインストールと環境構築
+   uv sync
    ```
 
 3. **認証情報の配置**
