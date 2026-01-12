@@ -88,3 +88,20 @@ def remove_video(
     else:
         console.print(f"[red]Failed to remove video from playlist (maybe not found?).[/]")
         raise typer.Exit(code=1)
+
+@app.command("rename")
+def rename_playlist(
+    old_name_or_id: str = typer.Argument(..., help="Current Playlist Name or ID"),
+    new_name: str = typer.Argument(..., help="New Playlist Name"),
+):
+    """
+    Rename a playlist.
+    """
+    setup_logging(level="INFO")
+    manager = _get_manager()
+    
+    if manager.rename_playlist(old_name_or_id, new_name):
+        console.print(f"[green]Successfully renamed playlist to '{new_name}'[/]")
+    else:
+        console.print(f"[red]Failed to rename playlist.[/]")
+        raise typer.Exit(code=1)

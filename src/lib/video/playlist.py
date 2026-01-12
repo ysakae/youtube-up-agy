@@ -197,3 +197,84 @@ class PlaylistManager:
         except HttpError as e:
             logger.error(f"Failed to get videos from playlist {playlist_name_or_id}: {e}")
             return []
+
+    def find_playlist_id(self, name_or_id: str) -> Optional[str]:
+        """
+        Tries to resolve a name or ID to a Playlist ID.
+        Checks cache first (titles), then checks if cached values match (IDs).
+        """
+        self._ensure_cache()
+        
+        # 1. Check if it's a known title
+        if name_or_id in self._playlist_cache:
+            return self._playlist_cache[name_or_id]
+            
+        # 2. Check if it's a known ID (value in cache)
+        if name_or_id in self._playlist_cache.values():
+            return name_or_id
+            
+        # 3. If not found in cache, it might be an ID we haven't seen (unlikely if cache is full list),
+        # or a title we haven't seen.
+        # For now, we assume if it starts with "PL" it's an ID, otherwise treat as title (which failed).
+        # But to be safe, if we return None, the caller can decide.
+        return None
+
+    def rename_playlist(self, name_or_id: str, new_title: str) -> bool:
+        """
+        Renames a playlist.
+        """
+        playlist_id = self.find_playlist_id(name_or_id)
+        if not playlist_id:
+            # If not found in cache, maybe it's a raw ID passed by user?
+            # Let's assume if it looks like an ID, we try to use it.
+            if name_or_id.startswith("PL"):
+                 playlist_id = name_or_id
+            else:
+                 logger.error(f"Playlist not found: {name_or_id}")
+                 return False
+
+        try:
+            service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+            
+            # 1. Get current snippet to preserve other fields
+            request = service.playlists().list(
+                part="snippet",
+                id=playlist_id
+            )
+            response = request.execute()
+            items = response.get("items", [])
+            
+            if not items:
+                logger.error(f"Playlist {playlist_id} not found on YouTube.")
+                return False
+                
+            snippet = items[0]["snippet"]
+            
+            # 2. Update title
+            snippet["title"] = new_title
+            
+            # 3. Update playlist
+            body = {
+                "id": playlist_id,
+                "snippet": snippet
+            }
+            
+            update_request = service.playlists().update(
+                part="snippet",
+                body=body
+            )
+            update_request.execute()
+            
+            # Update cache if possible
+            # We need to remove old entry if it was keyed by old title
+            keys_to_remove = [k for k, v in self._playlist_cache.items() if v == playlist_id]
+            for k in keys_to_remove:
+                del self._playlist_cache[k]
+            self._playlist_cache[new_title] = playlist_id
+            
+            logger.info(f"Renamed playlist {playlist_id} to '{new_title}'")
+            return True
+
+        except HttpError as e:
+            logger.error(f"Failed to rename playlist {name_or_id}: {e}")
+            return False
