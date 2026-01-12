@@ -107,5 +107,54 @@ class TestPlaylistManager(unittest.TestCase):
         self.assertFalse(result)
         mock_service.playlistItems().delete.assert_not_called()
 
+    @patch("src.lib.video.playlist.build")
+    def test_rename_playlist_success(self, mock_build):
+        # Setup mocks
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+        
+        mock_playlists = MagicMock()
+        mock_service.playlists.return_value = mock_playlists
+        
+        # list() response
+        mock_list = MagicMock()
+        mock_playlists.list.return_value = mock_list
+        mock_list.execute.return_value = {
+            "items": [{
+                "id": "PL123",
+                "snippet": {
+                    "title": "Old Name",
+                    "description": "Desc"
+                }
+            }]
+        }
+        
+        # update() response
+        mock_update = MagicMock()
+        mock_playlists.update.return_value = mock_update
+        mock_update.execute.return_value = {}
+
+        # Pre-populate cache to test lookup
+        self.manager._playlist_cache["Old Name"] = "PL123"
+
+        # Execute
+        result = self.manager.rename_playlist("Old Name", "New Name")
+
+        # Verify
+        self.assertTrue(result)
+        mock_playlists.update.assert_called_with(
+            part="snippet",
+            body={
+                "id": "PL123",
+                "snippet": {
+                    "title": "New Name",
+                    "description": "Desc"
+                }
+            }
+        )
+        # Check cache update
+        self.assertIn("New Name", self.manager._playlist_cache)
+        self.assertNotIn("Old Name", self.manager._playlist_cache)
+
 if __name__ == '__main__':
     unittest.main()
