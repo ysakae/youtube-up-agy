@@ -278,3 +278,38 @@ class PlaylistManager:
         except HttpError as e:
             logger.error(f"Failed to rename playlist {name_or_id}: {e}")
             return False
+
+    def get_all_playlists_map(self) -> Dict[str, set[str]]:
+        """
+        Returns a map where key is Playlist ID and value is a Set of Video IDs in that playlist.
+        """
+        self._ensure_cache()
+        playlist_map = {}
+        
+        try:
+            service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+            
+            # Use cached playlist IDs to fetch items for each
+            for title, playlist_id in self._playlist_cache.items():
+                video_ids = set()
+                
+                request = service.playlistItems().list(
+                    part="contentDetails",
+                    playlistId=playlist_id,
+                    maxResults=50
+                )
+                
+                while request:
+                    response = request.execute()
+                    for item in response.get("items", []):
+                        video_ids.add(item["contentDetails"]["videoId"])
+                        
+                    request = service.playlistItems().list_next(request, response)
+                    
+                playlist_map[playlist_id] = video_ids
+                
+            return playlist_map
+            
+        except HttpError as e:
+            logger.error(f"Failed to build playlist map: {e}")
+            return {}
