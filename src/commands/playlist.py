@@ -105,3 +105,103 @@ def rename_playlist(
     else:
         console.print(f"[red]Failed to rename playlist.[/]")
         raise typer.Exit(code=1)
+
+@app.command("orphans")
+def list_orphans(
+    fix: bool = typer.Option(False, "--fix", help="Automatically assign orphans to playlists based on history"),
+    yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation for fix"),
+):
+    """
+    Find videos not in any playlist (orphans) and optionally fix them.
+    """
+    setup_logging(level="INFO")
+    
+    # 1. Initialize Managers
+    credentials = get_credentials()
+    pl_manager = PlaylistManager(credentials)
+    # We need VideoManager for getting all uploads
+    from ..lib.video.manager import VideoManager
+    vid_manager = VideoManager(credentials)
+    
+    # 2. Fetch all videos and playlist map
+    console.print("[yellow]Fetching all uploaded videos and playlist data... (this may take a while)[/]")
+    
+    all_videos = vid_manager.get_all_uploaded_videos()
+    if not all_videos:
+        console.print("[red]No uploaded videos found or API error.[/]")
+        return
+
+    playlist_map = pl_manager.get_all_playlists_map()
+    
+    # 3. Identify Orphans
+    # Create a set of all video IDs currently in ANY playlist
+    videos_in_playlists = set()
+    for vid_set in playlist_map.values():
+        videos_in_playlists.update(vid_set)
+        
+    orphans = []
+    for vid in all_videos:
+        if vid["id"] not in videos_in_playlists:
+            orphans.append(vid)
+            
+    console.print(f"[bold]Total Videos:[/] {len(all_videos)}")
+    console.print(f"[bold]Videos in Playlists:[/] {len(videos_in_playlists)}")
+    console.print(f"[bold red]Orphan Videos:[/] {len(orphans)}")
+    
+    if not orphans:
+        console.print("[green]No orphan videos found. All videos are in at least one playlist.[/]")
+        return
+
+    # List orphans
+    console.print("\n[bold]Orphan Videos:[/]")
+    for orphan in orphans:
+        console.print(f"- {orphan['title']} ({orphan['id']})")
+        
+    if not fix:
+        console.print("\n[dim]Run with --fix to attempt automatic assignment based on local history.[/]")
+        return
+        
+    # 4. Fix Orphans
+    if not yes:
+        if not typer.confirm(f"\nAttempt to assign {len(orphans)} videos to playlists based on local history?"):
+            raise typer.Abort()
+            
+    # Initialize History to look up paths
+    from ..lib.data.history import HistoryManager
+    history = HistoryManager()
+    
+    console.print("\n[bold]Assigning Orphans...[/]")
+    
+    for orphan in orphans:
+        vid_id = orphan["id"]
+        # Look up in history
+        record = history.get_record_by_video_id(vid_id)
+        
+        target_playlist = None
+        if record:
+            # Try getting explicit playlist name first
+            target_playlist = record.get("playlist_name")
+            
+            # Fallback to parent dir of file path if available
+            if not target_playlist and record.get("file_path"):
+                try:
+                    from pathlib import Path
+                    target_playlist = Path(record["file_path"]).parent.name
+                except Exception:
+                    pass
+        
+        if target_playlist:
+            # Add to playlist
+            # We assume get_or_create handles the existence check
+            pl_id = pl_manager.get_or_create_playlist(target_playlist)
+            if pl_id:
+                if pl_manager.add_video_to_playlist(pl_id, vid_id):
+                    console.print(f"[green]Assigned {orphan['title']} -> {target_playlist}[/]")
+                else:
+                     console.print(f"[red]Failed to assign {orphan['title']} -> {target_playlist}[/]")
+            else:
+                 console.print(f"[red]Failed to get/create playlist {target_playlist} for {orphan['title']}[/]")
+        else:
+            console.print(f"[dim]Skipping {orphan['title']} (no history/playlist found)[/]")
+            
+    history.close()

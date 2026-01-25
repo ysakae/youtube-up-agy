@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -145,3 +145,54 @@ class VideoManager:
         except HttpError as e:
             logger.error(f"Failed to delete video {video_id}: {e}")
             return False
+
+    def get_all_uploaded_videos(self) -> List[Dict[str, str]]:
+        """
+        Retrieves all videos uploaded by the authenticated user.
+        """
+        try:
+            service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
+            
+            # 1. Get the "uploads" playlist ID from the channel resource
+            channels_response = service.channels().list(
+                mine=True,
+                part="contentDetails"
+            ).execute()
+            
+            channel_items = channels_response.get("items", [])
+            if not channel_items:
+                logger.error("No channel found for authenticated user.")
+                return []
+                
+            uploads_playlist_id = channel_items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+            
+            # 2. Iterate through the uploads playlist
+            videos = []
+            next_page_token = None
+            
+            logger.info("Fetching all uploaded videos...")
+            while True:
+                pl_request = service.playlistItems().list(
+                    playlistId=uploads_playlist_id,
+                    part="snippet,contentDetails",
+                    maxResults=50,
+                    pageToken=next_page_token
+                )
+                pl_response = pl_request.execute()
+                
+                for item in pl_response.get("items", []):
+                    videos.append({
+                        "id": item["contentDetails"]["videoId"],
+                        "title": item["snippet"]["title"]
+                    })
+                
+                next_page_token = pl_response.get("nextPageToken")
+                if not next_page_token:
+                    break
+            
+            logger.info(f"Found {len(videos)} uploaded videos.")
+            return videos
+            
+        except HttpError as e:
+            logger.error(f"Failed to fetch uploaded videos: {e}")
+            return []
