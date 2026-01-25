@@ -120,7 +120,29 @@ yt-up reupload ./my_videos/video.mp4 --dry-run
 
 - `--playlist / -p`: 再アップロード時にプレイリストを指定（または上書き）できます。
 
-### 5. リトライ (Retry)
+- `--playlist / -p`: 再アップロード時にプレイリストを指定（または上書き）できます。
+
+### 5. プレイリスト管理 (Playlist Management)
+プレイリストの操作やメンテナンスを行います。
+
+#### プレイリスト名変更
+```bash
+yt-up playlist rename "Old Name" "New Name"
+```
+
+#### 未分類動画（Orphan Videos）の整理
+どのプレイリストにも属していない動画（Orphan Videos）を一括検索し、履歴に基づいて自動的にプレイリストへ割り当てます。
+
+```bash
+# 検索のみ（リスト表示）
+yt-up playlist orphans
+
+# 自動割り当て実行（--fix）
+yt-up playlist orphans --fix
+```
+- **自動割り当ての仕組み**: 動画がローカルの `upload_history.json` に記録されている場合、その記録にある「プレイリスト名」または「ファイルパスの親フォルダ名」を使用して、適切なプレイリストへ追加します。
+
+### 6. リトライ (Retry)
 過去にアップロードに失敗したファイルを抽出し、再試行します。
 
 ```bash
