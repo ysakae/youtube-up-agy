@@ -4,19 +4,18 @@
 
 ## 環境構築
 
-開発には `venv` の利用を推奨します。
+開発には `uv` (高速なPythonパッケージマネージャー) の利用を推奨します。
 
 ```bash
 # クローン
 git clone https://github.com/ysakae/youtube-bulkup.git
 cd youtube-bulkup
 
-# 仮想環境作成と有効化
-python3 -m venv .venv
-source .venv/bin/activate
+# uvが未インストールの場合はインストール
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 依存関係インストール (開発用にeditable install推奨)
-pip install -e .
+# 依存関係インストール（開発用依存含む）
+uv sync --all-extras
 ```
 
 ## 開発フロー (GitHub Flow)

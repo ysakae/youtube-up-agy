@@ -8,9 +8,10 @@
 - **🚀 一括アップロード**: ディレクトリ内の動画を自動検出し、並行してアップロードします。
 - **📺 プレイリスト対応**: アップロード時にプレイリスト名を指定可能。指定がない場合はディレクトリ名から自動的にプレイリストを作成・追加します。
 - **🔄 重複検知**: ファイルハッシュを確認し、既にアップロード済みの動画は自動的にスキップします。
-- **📂 自動メタデータ設定**: フォルダ名とファイル情報からタイトル・説明・タグを自動生成します。また、ビデオファイル自身のメタデータ（撮影日時など）を抽出し、YouTubeに反映します。
+- **📂 自動メタデータ設定**: テンプレートとファイル情報からタイトル・説明・タグを自動生成します。フォルダ別に `.yt-meta.yaml` でカスタマイズも可能。
 - **🛡️ 堅牢な再開機能**: ネットワーク切断時の一時停止・再開（レジューム）や、指数バックオフによるリトライ処理を完備。
 - **📊 リッチな進捗表示**: アップロード状況をリアルタイムに美しく表示します。
+- **📋 Quota自動制御**: YouTube APIの日次クォータ残量を自動チェックし、超過前に警告します。
 
 ## 前提条件
 
@@ -65,7 +66,6 @@
 
 ```yaml
 auth:
-  # 認証ファイルのパス
   client_secrets_file: "client_secrets.json"
   token_file: "token.pickle"
 
@@ -73,6 +73,31 @@ upload:
   chunk_size: 4194304  # 4MB (ネットワーク環境に応じて調整)
   retry_count: 5       # 失敗時の最大リトライ回数
   privacy_status: "private" # private, public, unlisted
+  daily_quota_limit: 10000  # YouTube API 日次クォータ上限 (ユニット)
+
+# 履歴DB (SQLite)
+history_db: "upload_history.db"
+
+# メタデータテンプレート
+# 利用可能な変数: {folder}, {stem}, {filename}, {date}, {year}, {index}, {total}
+metadata:
+  title_template: "【{folder}】{stem}"
+  description_template: |
+    {folder}
+    No. {index}/{total}
+
+    File: {filename}
+    Captured: {date}
+  tags:
+    - "auto-upload"
+```
+
+フォルダに `.yt-meta.yaml` を配置すると、そのフォルダの動画だけテンプレートをオーバーライドできます。
+
+```yaml
+# .yt-meta.yaml の例
+title_template: "{stem} @ {folder}"
+extra_tags: ["vacation", "summer"]
 ```
 
 ## 使い方
@@ -123,6 +148,12 @@ yt-up reupload ./my_videos/video.mp4 --dry-run
 ### 5. プレイリスト管理 (Playlist Management)
 プレイリストの操作やメンテナンスを行います。
 
+#### プレイリスト一覧
+```bash
+yt-up playlist list              # 全プレイリスト一覧
+yt-up playlist list "Playlist"   # 特定プレイリスト内の動画一覧
+```
+
 #### プレイリスト名変更
 ```bash
 yt-up playlist rename "Old Name" "New Name"
@@ -138,18 +169,78 @@ yt-up playlist orphans
 # 自動割り当て実行（--fix）
 yt-up playlist orphans --fix
 ```
-- **自動割り当ての仕組み**: 動画がローカルの `upload_history.json` に記録されている場合、その記録にある「プレイリスト名」または「ファイルパスの親フォルダ名」を使用して、適切なプレイリストへ追加します。
 
 ### 6. リトライ (Retry)
 過去にアップロードに失敗したファイルを抽出し、再試行します。
 
 ```bash
 yt-up retry
+
+# フィルター付きリトライ
+yt-up retry --limit 5                  # 最大5件まで
+yt-up retry --since "2026-01-01"       # 指定日以降の失敗のみ
+yt-up retry --error quota              # エラーメッセージでフィルタ
 ```
 
 - **プレイリストの自動復元**: アップロード失敗時に、追加予定だったプレイリスト名が履歴に保存されています。`retry` コマンドは自動的にそのプレイリストへ追加を試みます。
-  - 履歴にプレイリスト情報がない場合（古いバージョンの履歴など）、**フォルダ名** がデフォルトとして使用されます。
 - `--playlist / -p`: 履歴に保存されたプレイリスト名を無視し、指定したプレイリストへ強制的に追加したい場合に使用します。
+
+### 7. 動画管理 (Video Management)
+アップロード済み動画の一覧表示や設定変更を行います。
+
+```bash
+# 動画一覧
+yt-up video list                       # 全動画一覧
+yt-up video list --status private      # 公開状態でフィルタ
+
+# 公開設定変更
+yt-up video update-privacy <VIDEO_ID> public
+yt-up video update-privacy all unlisted --playlist "MyPlaylist"
+
+# メタデータ更新
+yt-up video update-meta <VIDEO_ID> --title "New Title"
+
+# サムネイル更新
+yt-up video update-thumbnail <VIDEO_ID> ./thumb.jpg
+
+# 動画削除
+yt-up video delete-video <VIDEO_ID> -y
+```
+
+### 8. 履歴管理 (History)
+アップロード履歴の確認・エクスポート・インポートを行います。
+
+```bash
+# 履歴一覧
+yt-up history                          # 全件表示
+yt-up history --status success         # 成功のみ
+yt-up history --limit 10              # 最新10件
+
+# 履歴削除
+yt-up history delete --path ./video.mp4
+yt-up history delete --hash <FILE_HASH>
+
+# エクスポート / インポート
+yt-up history export --output backup.json
+yt-up history export --format csv --output backup.csv
+yt-up history import backup.json
+```
+
+### 9. 同期チェック (Sync)
+ローカル履歴とYouTube上の動画を比較し、差分を表示します。
+
+```bash
+yt-up sync                             # 差分レポート
+yt-up sync --fix                       # ローカル専用レコードを自動削除
+yt-up sync --fix -y                    # 確認なしで実行
+```
+
+### 10. Quota 確認 (Quota)
+YouTube APIの本日のクォータ使用状況を確認します。
+
+```bash
+yt-up quota
+```
 
 ## Quota (API割り当て) について
 
@@ -161,4 +252,3 @@ YouTube Data API には1日あたりの使用制限（Quota）があります。
 
 ## ライセンス
 MIT License
-```
