@@ -2,16 +2,59 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
+import yaml
 from hachoir.metadata import extractMetadata
 from hachoir.parser import createParser
+
+from ..core.config import config
 
 logger = logging.getLogger("youtube_up")
 
 class FileMetadataGenerator:
     """
     Generates metadata from file attributes and internal video metadata
-    using hachoir.
+    using hachoir. テンプレート設定と .yt-meta.yaml によるカスタマイズに対応。
     """
+
+    def _load_folder_override(self, folder: Path) -> Dict[str, Any]:
+        """
+        フォルダ内の .yt-meta.yaml を読み込む。
+        存在しない場合は空辞書を返す。
+        """
+        meta_file = folder / ".yt-meta.yaml"
+        if meta_file.exists():
+            try:
+                with open(meta_file, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                logger.info(f"Loaded folder override: {meta_file}")
+                return data
+            except Exception as e:
+                logger.warning(f"Failed to read {meta_file}: {e}")
+        return {}
+
+    def _resolve_template_config(self, folder: Path) -> Dict[str, Any]:
+        """
+        settings.yaml のメタデータ設定をベースに、
+        フォルダ別 .yt-meta.yaml でオーバーライドして返す。
+        """
+        # ベース設定
+        base = {
+            "title_template": config.metadata.title_template,
+            "description_template": config.metadata.description_template,
+            "tags": list(config.metadata.tags),
+        }
+        # フォルダ別オーバーライド
+        override = self._load_folder_override(folder)
+        if override:
+            if "title_template" in override:
+                base["title_template"] = override["title_template"]
+            if "description_template" in override:
+                base["description_template"] = override["description_template"]
+            if "tags" in override:
+                base["tags"] = override["tags"]
+            if "extra_tags" in override:
+                base["tags"] = base["tags"] + override["extra_tags"]
+        return base
 
     def generate(self, file_path: Path, index: int, total: int) -> Dict[str, Any]:
         """
@@ -28,38 +71,56 @@ class FileMetadataGenerator:
         # 1. Extract internal metadata (Date, Duration, GPS if available)
         meta_info = self._extract_raw_metadata(file_path)
         
-        # 2. Format Title
-        # Format: 【Folder Name】Filename
-        # Truncate if too long (YouTube max 100 chars)
-        title = f"【{folder_name}】{file_path.stem}"
+        # テンプレート設定を解決
+        tmpl = self._resolve_template_config(file_path.parent)
+        
+        # テンプレート変数を準備
+        creation_date = meta_info.get("creation_date")
+        date_str = creation_date.strftime('%Y-%m-%d %H:%M:%S') if creation_date else "Unknown"
+        year_str = str(creation_date.year) if creation_date else ""
+        
+        # 安全なテンプレート展開用の変数マップ
+        vars_map = {
+            "folder": folder_name,
+            "stem": file_path.stem,
+            "filename": file_name,
+            "date": date_str,
+            "year": year_str,
+            "index": str(index),
+            "total": str(total),
+        }
+
+        # 2. Format Title (テンプレート展開)
+        try:
+            title = tmpl["title_template"].format_map(vars_map)
+        except (KeyError, ValueError) as e:
+            logger.warning(f"Title template error: {e}, falling back to default")
+            title = f"【{folder_name}】{file_path.stem}"
         if len(title) > 100:
             title = title[:97] + "..."
 
-        # 3. Format Description
-        # Folder Name
-        # No. X/Y
-        # 
-        # File: Filename
-        # Captured: Date
-        creation_date = meta_info.get("creation_date")
-        date_str = creation_date.strftime('%Y-%m-%d %H:%M:%S') if creation_date else "Unknown"
-        
-        description = (
-            f"{folder_name}\n"
-            f"No. {index}/{total}\n\n"
-            f"File: {file_name}\n"
-            f"Captured: {date_str}\n"
-        )
+        # 3. Format Description (テンプレート展開)
+        try:
+            description = tmpl["description_template"].format_map(vars_map)
+        except (KeyError, ValueError) as e:
+            logger.warning(f"Description template error: {e}, falling back to default")
+            description = (
+                f"{folder_name}\n"
+                f"No. {index}/{total}\n\n"
+                f"File: {file_name}\n"
+                f"Captured: {date_str}\n"
+            )
 
-        # 4. Tags
-        tags = ["auto-upload", folder_name]
-        if creation_date:
-            tags.append(str(creation_date.year))
+        # 4. Tags (テンプレート設定 + 動的タグ)
+        tags = list(tmpl["tags"])
+        if folder_name not in tags:
+            tags.append(folder_name)
+        if year_str and year_str not in tags:
+            tags.append(year_str)
         
         # 5. Recording Details for YouTube API
         recording_details = {}
         if creation_date:
-            # Format: YYYY-MM-DDThh:mm:ss.sZ
             recording_details["recordingDate"] = creation_date.isoformat() + "Z"
 
         # GPS Location

@@ -1,5 +1,6 @@
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from ..lib.auth.auth import get_credentials
 from ..lib.core.logger import setup_logging
@@ -16,6 +17,53 @@ def _get_manager():
     except Exception as e:
         console.print(f"[bold red]Auth Error:[/] {e}")
         raise typer.Exit(code=1)
+
+@app.command("list")
+def list_videos(
+    status: str = typer.Option(
+        None, "--status", "-s", help="Filter by privacy status (private/public/unlisted)"
+    ),
+):
+    """
+    アップロード済み動画の一覧を表示する。
+    """
+    setup_logging(level="INFO")
+    manager = _get_manager()
+
+    console.print("[bold cyan]Fetching videos (this may take a while)...[/]")
+    videos = manager.get_all_uploaded_videos()
+
+    if not videos:
+        console.print("[yellow]No uploaded videos found.[/]")
+        return
+
+    # フィルタリング
+    if status:
+        videos = [v for v in videos if v.get("privacy") == status]
+        if not videos:
+            console.print(f"[yellow]No videos found with status: {status}[/]")
+            return
+
+    table = Table(title=f"Uploaded Videos ({len(videos)} total)")
+    table.add_column("#", style="dim", width=5)
+    table.add_column("Title", style="magenta")
+    table.add_column("Video ID", style="cyan")
+    table.add_column("Privacy", style="dim")
+
+    for i, v in enumerate(videos, 1):
+        vid = v["id"]
+        link = f"[link=https://youtu.be/{vid}]{vid}[/link]"
+        privacy = v.get("privacy", "unknown")
+        # 公開状態に色を付ける
+        if privacy == "public":
+            privacy_display = f"[green]{privacy}[/]"
+        elif privacy == "unlisted":
+            privacy_display = f"[yellow]{privacy}[/]"
+        else:
+            privacy_display = f"[dim]{privacy}[/]"
+        table.add_row(str(i), v["title"], link, privacy_display)
+
+    console.print(table)
 
 def _get_playlist_manager():
     try:

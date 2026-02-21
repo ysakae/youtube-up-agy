@@ -18,3 +18,17 @@ upload:
 
 # Database path
 history_db: "upload_history.json"
+
+# Metadata templates
+# 利用可能な変数: {folder}, {stem}, {filename}, {date}, {year}, {index}, {total}
+# フォルダに .yt-meta.yaml を置くとフォルダ別にオーバーライド可能
+metadata:
+  title_template: "【{folder}】{stem}"
+  description_template: |
+    {folder}
+    No. {index}/{total}
+
+    File: {filename}
+    Captured: {date}
+  tags:
+    - "auto-upload"

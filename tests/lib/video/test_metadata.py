@@ -157,3 +157,53 @@ class TestFileMetadataGenerator:
         assert "location" in rec_details
         assert rec_details["location"]["latitude"] == 40.1234
         assert rec_details["location"]["longitude"] == 140.5678
+
+    @patch("src.lib.video.metadata.config")
+    @patch("src.lib.video.metadata.createParser")
+    def test_generate_with_custom_template(self, mock_parser, mock_config, generator):
+        """テンプレート設定を使ったメタデータ生成テスト"""
+        mock_parser.return_value = None
+
+        # テンプレート設定をモック
+        mock_config.metadata.title_template = "{folder} - {stem} ({date})"
+        mock_config.metadata.description_template = "Folder: {folder}\nFile: {filename}"
+        mock_config.metadata.tags = ["custom-tag"]
+
+        file_path = Path("/path/to/MyFolder/clip.mp4")
+        result = generator.generate(file_path, index=1, total=3)
+
+        assert result["title"] == "MyFolder - clip (Unknown)"
+        assert "Folder: MyFolder" in result["description"]
+        assert "File: clip.mp4" in result["description"]
+        assert "custom-tag" in result["tags"]
+        assert "MyFolder" in result["tags"]
+
+    @patch("src.lib.video.metadata.config")
+    @patch("src.lib.video.metadata.createParser")
+    def test_generate_with_folder_override(self, mock_parser, mock_config, generator, tmp_path):
+        """フォルダ別 .yt-meta.yaml でのオーバーライドテスト"""
+        mock_parser.return_value = None
+
+        # デフォルトテンプレート設定
+        mock_config.metadata.title_template = "【{folder}】{stem}"
+        mock_config.metadata.description_template = "{folder} {filename}"
+        mock_config.metadata.tags = ["auto-upload"]
+
+        # フォルダに .yt-meta.yaml を作成
+        import yaml
+        override = {
+            "title_template": "{stem} @ {folder}",
+            "extra_tags": ["vacation", "beach"],
+        }
+        meta_file = tmp_path / ".yt-meta.yaml"
+        meta_file.write_text(yaml.dump(override))
+
+        video_file = tmp_path / "sunset.mp4"
+        video_file.touch()
+
+        result = generator.generate(video_file, index=1, total=1)
+
+        assert result["title"] == f"sunset @ {tmp_path.name}"
+        assert "vacation" in result["tags"]
+        assert "beach" in result["tags"]
+        assert "auto-upload" in result["tags"]
