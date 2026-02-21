@@ -24,11 +24,22 @@ class UploadConfig(BaseModel):
     daily_quota_limit: int = 10000  # YouTube API の1日あたりのクォータ上限
 
 
+class MetadataConfig(BaseModel):
+    # テンプレート変数: {folder}, {stem}, {filename}, {date}, {year}, {index}, {total}
+    title_template: str = "【{folder}】{stem}"
+    description_template: str = (
+        "{folder}\n"
+        "No. {index}/{total}\n\n"
+        "File: {filename}\n"
+        "Captured: {date}"
+    )
+    tags: List[str] = ["auto-upload"]
 
 
 class AppConfig(BaseModel):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     upload: UploadConfig = Field(default_factory=UploadConfig)
+    metadata: MetadataConfig = Field(default_factory=MetadataConfig)
     history_db: str = "upload_history.json"
 
     @classmethod

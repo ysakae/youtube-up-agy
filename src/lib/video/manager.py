@@ -149,6 +149,7 @@ class VideoManager:
     def get_all_uploaded_videos(self) -> List[Dict[str, str]]:
         """
         Retrieves all videos uploaded by the authenticated user.
+        公開状態 (privacyStatus) も含めて返す。
         """
         try:
             service = build("youtube", "v3", credentials=self.credentials, cache_discovery=False)
@@ -189,6 +190,22 @@ class VideoManager:
                 next_page_token = pl_response.get("nextPageToken")
                 if not next_page_token:
                     break
+            
+            # 3. Batch fetch privacy status (50件ずつ)
+            if videos:
+                video_ids = [v["id"] for v in videos]
+                privacy_map = {}
+                for i in range(0, len(video_ids), 50):
+                    batch_ids = video_ids[i:i + 50]
+                    vid_response = service.videos().list(
+                        id=",".join(batch_ids),
+                        part="status"
+                    ).execute()
+                    for item in vid_response.get("items", []):
+                        privacy_map[item["id"]] = item["status"]["privacyStatus"]
+                
+                for v in videos:
+                    v["privacy"] = privacy_map.get(v["id"], "unknown")
             
             logger.info(f"Found {len(videos)} uploaded videos.")
             return videos

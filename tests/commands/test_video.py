@@ -97,5 +97,50 @@ class TestVideoCommand(unittest.TestCase):
          self.assertEqual(result.exit_code, 0)
          mock_idx_mgr.delete_video.assert_called_with("VID123")
 
+    @patch("src.commands.video.get_credentials")
+    @patch("src.commands.video.VideoManager")
+    def test_list_videos(self, MockVideoManager, mock_get_credentials):
+        """video list の正常系テスト"""
+        mock_get_credentials.return_value = MagicMock()
+        mock_mgr = MockVideoManager.return_value
+        mock_mgr.get_all_uploaded_videos.return_value = [
+            {"id": "vid1", "title": "Video One", "privacy": "private"},
+            {"id": "vid2", "title": "Video Two", "privacy": "public"},
+        ]
+
+        result = runner.invoke(app, ["video", "list"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Video One", result.output)
+        self.assertIn("Video Two", result.output)
+        mock_mgr.get_all_uploaded_videos.assert_called_once()
+
+    @patch("src.commands.video.get_credentials")
+    @patch("src.commands.video.VideoManager")
+    def test_list_videos_with_status_filter(self, MockVideoManager, mock_get_credentials):
+        """video list --status フィルタテスト"""
+        mock_get_credentials.return_value = MagicMock()
+        mock_mgr = MockVideoManager.return_value
+        mock_mgr.get_all_uploaded_videos.return_value = [
+            {"id": "vid1", "title": "Private Video", "privacy": "private"},
+            {"id": "vid2", "title": "Public Video", "privacy": "public"},
+        ]
+
+        result = runner.invoke(app, ["video", "list", "--status", "public"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Public Video", result.output)
+        # private のものは表示されないはず（フィルタ済み）
+
+    @patch("src.commands.video.get_credentials")
+    @patch("src.commands.video.VideoManager")
+    def test_list_videos_empty(self, MockVideoManager, mock_get_credentials):
+        """動画0件の場合のテスト"""
+        mock_get_credentials.return_value = MagicMock()
+        mock_mgr = MockVideoManager.return_value
+        mock_mgr.get_all_uploaded_videos.return_value = []
+
+        result = runner.invoke(app, ["video", "list"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("No uploaded videos found", result.output)
+
 if __name__ == "__main__":
     unittest.main()

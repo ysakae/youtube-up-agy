@@ -1,5 +1,6 @@
 import asyncio
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -26,6 +27,15 @@ def retry(
     playlist: str = typer.Option(
         None, "--playlist", "-p", help="Playlist name (override persisted history or default)"
     ),
+    limit: int = typer.Option(
+        0, "--limit", "-l", help="Maximum number of files to retry (0 for all)"
+    ),
+    since: str = typer.Option(
+        None, "--since", help="Only retry failures after this date (YYYY-MM-DD)"
+    ),
+    error: str = typer.Option(
+        None, "--error", "-e", help="Only retry failures containing this text in error message"
+    ),
 ):
     """
     Retry uploading failed files.
@@ -39,7 +49,35 @@ def retry(
         console.print("[green]No failed uploads found.[/]")
         return
 
-    console.print(f"[bold]Found {len(failed_records)} failed uploads.[/]")
+    # フィルタリング: --since
+    if since:
+        try:
+            since_dt = datetime.strptime(since, "%Y-%m-%d")
+            since_ts = since_dt.timestamp()
+            failed_records = [
+                r for r in failed_records
+                if r.get("timestamp", 0) >= since_ts
+            ]
+        except ValueError:
+            console.print("[red]--since の形式は YYYY-MM-DD にしてください。[/]")
+            raise typer.Exit(code=1)
+
+    # フィルタリング: --error
+    if error:
+        failed_records = [
+            r for r in failed_records
+            if error.lower() in r.get("error", "").lower()
+        ]
+
+    # フィルタリング: --limit
+    if limit > 0:
+        failed_records = failed_records[:limit]
+
+    if not failed_records:
+        console.print("[yellow]No failed uploads found matching filters.[/]")
+        return
+
+    console.print(f"[bold]Found {len(failed_records)} failed uploads to retry.[/]")
 
     # Group files by playlist
     tasks_by_playlist = defaultdict(list)
